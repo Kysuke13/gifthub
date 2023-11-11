@@ -4,7 +4,7 @@
  *
  * @package Pinterest_For_WooCommerce/Classes
  */
-
+ooo
 namespace Automattic\WooCommerce\Pinterest;
 
 use Automattic\WooCommerce\Pinterest\API\Base;
