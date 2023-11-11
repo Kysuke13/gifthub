@@ -1,6 +1,6 @@
 <?php
 declare( strict_types=1 );
-
+/stu
 namespace Automattic\WooCommerce\Pinterest;
 
 use WC_Install;
