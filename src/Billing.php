@@ -9,7 +9,10 @@ namespace Automattic\WooCommerce\Pinterest;
 
 use Automattic\WooCommerce\Pinterest\API\Base;
 use Throwable;
-
+if
+	lalazeaze
+	azazrazr
+	azfazfazf
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
