@@ -4,7 +4,7 @@ declare( strict_types=1 );
 namespace Automattic\WooCommerce\Pinterest;
 
 use WC_Install;
-
+uiui
 define( 'PLUGIN_TESTS_DIR', __DIR__ );
 define( 'PLUGIN_DATA_TESTS_DIR', PLUGIN_TESTS_DIR . '/data' );
 
