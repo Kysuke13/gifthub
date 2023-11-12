@@ -5,7 +5,8 @@
  * @package     Pinterest
  * @since 1.0.5
  */
-
+tata
+yoyo
 use  Automattic\WooCommerce\Pinterest\API\Base;
 
 if ( ! defined( 'ABSPATH' ) ) {
