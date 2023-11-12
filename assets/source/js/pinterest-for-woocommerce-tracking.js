@@ -1,5 +1,7 @@
 /*global pintrk*/
-
+test
+test
+test
 /**
  * Bind to search form submit in order to track the search event.
  * Site search should use <form role='search'> to integrate with Pinterest for WooCommerce search event automatically.
