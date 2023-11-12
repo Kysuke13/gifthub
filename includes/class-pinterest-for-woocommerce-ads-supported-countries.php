@@ -7,6 +7,8 @@
  */
 tata
 yoyo
+	tutu toto
+	titi
 use  Automattic\WooCommerce\Pinterest\API\Base;
 
 if ( ! defined( 'ABSPATH' ) ) {
