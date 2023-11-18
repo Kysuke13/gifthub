@@ -8,6 +8,8 @@
 
 namespace Automattic\WooCommerce\Pinterest;
 
+use WP_Error;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -20,7 +22,7 @@ class Logger {
 	/**
 	 * The single instance of the class.
 	 *
-	 * @var WC_Logger
+	 * @var \WC_Logger
 	 * @since 1.0.0
 	 */
 	public static $logger;
@@ -40,9 +42,9 @@ class Logger {
 	 * @param string $feature Used to direct logs to a separate file.
 	 * @param string $force   Used to bypass system settings and force the logs.
 	 *
-	 * @return string
+	 * @return void
 	 */
-	public static function log( $message, $level = 'debug', $feature = null, $force = false ) {
+	public static function log( $message, $level = 'debug', $feature = null, $force = false ): void {
 
 		$allow_logging = true;
 		if ( 'debug' === $level ) {
@@ -69,15 +71,15 @@ class Logger {
 	/**
 	 * Helper for Logging API requests.
 	 *
-	 * @param string $url The URL of the request.
-	 * @param string $args The Arguments of the request.
-	 * @param string $level The default level/context of the message to be logged.
+	 * @param string   $url   The URL of the request.
+	 * @param string[] $args  The Arguments of the request.
+	 * @param string   $level The default level/context of the message to be logged.
 	 *
 	 * @return void
 	 */
 	public static function log_request( $url, $args, $level = 'debug' ) {
 		unset( $args['headers'] );
-		$method = isset( $args['method'] ) ? $args['method'] : 'POST';
+		$method = $args['method'] ?? 'POST';
 		$data   = ! empty( $args['body'] ) ? $args['body'] : '--- EMPTY STRING ---';
 		$data   = is_array( $data ) ? wp_json_encode( $data ) : $data;
 		self::log( "{$method} Request: " . $url . "\n\n" . $data . "\n", $level );
@@ -87,7 +89,7 @@ class Logger {
 	 *  Helper for Logging API responses.
 	 *
 	 * @param array|WP_Error $response The body of the response.
-	 * @param string         $level The default level/context of the message to be logged.
+	 * @param string         $level    The default level/context of the message to be logged.
 	 *
 	 * @return void
 	 */
@@ -96,7 +98,16 @@ class Logger {
 			$level = 'error';
 			$data  = $response->get_error_code() . ': ' . $response->get_error_message();
 		} else {
-			$data = $response['http_response']->get_response_object()->raw;
+			// Collecting response data.
+			$status  = wp_remote_retrieve_response_code( $response );
+			$message = wp_remote_retrieve_response_message( $response );
+			$body    = wp_remote_retrieve_body( $response );
+			$headers = wp_remote_retrieve_headers( $response );
+			if ( is_object( $headers ) ) {
+				$headers = $headers->getAll();
+			}
+
+			$data = 'Status: ' . $status . ' ' . $message . "\n\n" . 'Headers: ' . wp_json_encode( $headers ) . "\n\n" . 'Body: ' . $body;
 		}
 
 		self::log( 'Response: ' . "\n\n" . $data . "\n", $level );

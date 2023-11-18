@@ -11,6 +11,7 @@ namespace Automattic\WooCommerce\Pinterest\API;
 
 use Automattic\WooCommerce\Pinterest as Pinterest;
 use Automattic\WooCommerce\Pinterest\Logger as Logger;
+use Automattic\WooCommerce\Pinterest\PinterestApiException;
 use Automattic\WooCommerce\Pinterest\PinterestApiException as ApiException;
 use \Exception;
 
@@ -77,8 +78,8 @@ class Base {
 	 *
 	 * @return array
 	 *
-	 * @throws ApiException PHP exception.
-	 * @throws Exception    PHP exception.
+	 * @throws PinterestApiException Pinterest API exception in case of API error in response.
+	 * @throws Exception             PHP exception.
 	 */
 	public static function make_request( $endpoint, $method = 'POST', $payload = array(), $api = '', $cache_expiry = false ) {
 
@@ -91,28 +92,12 @@ class Base {
 		}
 
 		try {
-			$api         = empty( $api ) ? '' : trailingslashit( $api );
-			$api_version = 'ads/' === $api ? self::API_ADS_VERSION : self::API_VERSION;
 
-			$request = array(
-				'url'     => self::API_DOMAIN . "/{$api}v{$api_version}/{$endpoint}",
-				'method'  => $method,
-				'args'    => $payload,
-				'headers' => array(
-					'Pinterest-Woocommerce-Version' => PINTEREST_FOR_WOOCOMMERCE_VERSION,
-				),
-			);
-
-			if ( 'ads/' === $api && 'POST' === $method ) {
-				// Force json content-type header and json encode payload.
-				$request['headers']['Content-Type'] = 'application/json';
-
-				$request['args'] = wp_json_encode( $payload );
-			}
-
-			$response = self::handle_request( $request );
+			$request  = static::prepare_request( $endpoint, $method, $payload, $api );
+			$response = static::handle_request( $request );
 
 			if ( ! empty( $cache_expiry ) ) {
+				$cache_key = self::get_cache_key( $endpoint, $method, $payload, $api );
 				set_transient( $cache_key, $response, $cache_expiry );
 			}
 
@@ -162,6 +147,39 @@ class Base {
 			throw $e;
 		}
 
+	}
+
+	/**
+	 * Prepare request
+	 *
+	 * @param string $endpoint        the endpoint to perform the request on.
+	 * @param string $method          eg, POST, GET, PUT etc.
+	 * @param array  $payload         Payload to be sent on the request's body.
+	 * @param string $api             The specific Endpoints subset.
+	 *
+	 * @return array
+	 */
+	public static function prepare_request( $endpoint, $method = 'POST', $payload = array(), $api = '' ) {
+		$api         = empty( $api ) ? '' : trailingslashit( $api );
+		$api_version = 'ads/' === $api ? self::API_ADS_VERSION : self::API_VERSION;
+
+		$request = array(
+			'url'     => static::API_DOMAIN . "/{$api}v{$api_version}/{$endpoint}",
+			'method'  => $method,
+			'args'    => $payload,
+			'headers' => array(
+				'Pinterest-Woocommerce-Version' => PINTEREST_FOR_WOOCOMMERCE_VERSION,
+			),
+		);
+
+		if ( 'ads/' === $api && in_array( $method, array( 'POST', 'PATCH' ), true ) ) {
+			// Force json content-type header and json encode payload.
+			$request['headers']['Content-Type'] = 'application/json';
+
+			$request['args'] = wp_json_encode( $payload );
+		}
+
+		return $request;
 	}
 
 	/**
@@ -231,7 +249,7 @@ class Base {
 	 * @throws Exception PHP exception.
 	 * @throws ApiException PHP exception.
 	 */
-	public static function handle_request( $request ) {
+	protected static function handle_request( $request ) {
 
 		$request = wp_parse_args(
 			$request,
@@ -243,14 +261,9 @@ class Base {
 			)
 		);
 
-		$body = '';
-
 		try {
-
-			self::get_token();
-
 			if ( $request['auth_header'] ) {
-				$request['headers']['Authorization'] = 'Bearer ' . self::$token['access_token'];
+				$request['headers']['Authorization'] = 'Bearer ' . self::get_token()['access_token'];
 			}
 
 			$request_args = array(
@@ -319,7 +332,7 @@ class Base {
 	 */
 	public static function get_token() {
 		if ( is_null( self::$token ) ) {
-			self::$token = Pinterest_For_Woocommerce()::get_token();
+			self::$token = Pinterest_For_Woocommerce()::get_access_token();
 		}
 
 		return self::$token;
@@ -343,7 +356,7 @@ class Base {
 			throw new Exception( __( 'Empty body', 'pinterest-for-woocommerce' ), 204 );
 		}
 
-		return (array) json_decode( $response['body'] );
+		return json_decode( $response['body'], true );
 	}
 
 
@@ -491,6 +504,19 @@ class Base {
 
 
 	/**
+	 * Get the parameters of an existing tag.
+	 *
+	 * @param string $advertiser_id The advertiser_id to request the tag for.
+	 * @param string $tag_id        The tag_id for which we want to get.
+	 *
+	 * @return mixed
+	 */
+	public static function get_advertiser_tag( $advertiser_id, $tag_id ) {
+		return self::make_request( "advertisers/{$advertiser_id}/conversion_tags/{$tag_id}", 'GET', array(), 'ads' );
+	}
+
+
+	/**
 	 * Create a tag for the given advertiser.
 	 *
 	 * @param string $advertiser_id the advertiser_id to create a tag for.
@@ -499,7 +525,7 @@ class Base {
 	 */
 	public static function create_tag( $advertiser_id ) {
 
-		$tag_name = apply_filters( 'pinterest_for_woocommerce_default_tag_name', esc_html__( 'Auto-created by Pinterest for WooCommerce', 'pinterest-for-woocommerce' ) );
+		$tag_name = static::get_tag_name();
 
 		return self::make_request(
 			"advertisers/{$advertiser_id}/conversion_tags",
@@ -507,6 +533,32 @@ class Base {
 			array(
 				'name' => $tag_name,
 			),
+			'ads'
+		);
+	}
+
+
+	/**
+	 * Update the parameters of an existing tag.
+	 *
+	 * @param string $tag_id The tag_id for which we want to update the parameters.
+	 * @param array  $params The parameters to update.
+	 *
+	 * @return mixed
+	 */
+	public static function update_tag( $tag_id, $params = array() ) {
+		$advertiser_id = Pinterest_For_Woocommerce()::get_setting( 'tracking_advertiser' );
+
+		if ( ! $advertiser_id || empty( $params ) ) {
+			return false;
+		}
+
+		$params['id'] = (string) $tag_id;
+
+		return self::make_request(
+			"advertisers/{$advertiser_id}/conversion_tags",
+			'PATCH',
+			$params,
 			'ads'
 		);
 	}
@@ -569,6 +621,8 @@ class Base {
 	 */
 	public static function update_merchant_feed( $merchant_id, $feed_id, $args ) {
 
+		// phpcs:ignore Squiz.Commenting.InlineComment.InvalidEndChar
+		// nosemgrep: audit.php.wp.security.xss.query-arg
 		return self::make_request(
 			add_query_arg( $args, 'commerce/product_pin_merchants/' . $merchant_id . '/feed/' . $feed_id . '/' ),
 			'PUT'
@@ -762,5 +816,26 @@ class Base {
 	public static function get_list_of_ads_supported_countries() {
 		$request_url = 'advertisers/countries';
 		return self::make_request( $request_url, 'GET', array(), 'ads', DAY_IN_SECONDS );
+	}
+
+	/**
+	 * Generates a tag name.
+	 *
+	 * @since x.x.x
+	 *
+	 * @return string The tag name.
+	 */
+	protected static function get_tag_name(): string {
+		/**
+		 * Filters the default tag name.
+		 *
+		 * @since Unknown
+		 *
+		 * @param string $tag_name The default tag name.
+		 */
+		return apply_filters(
+			'pinterest_for_woocommerce_default_tag_name',
+			esc_html__( 'Auto-created by Pinterest for WooCommerce', 'pinterest-for-woocommerce' )
+		);
 	}
 }
