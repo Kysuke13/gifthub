@@ -5,7 +5,22 @@ import { useSettingsSelect } from '../../../setup-guide/app/helpers/effects';
 import OnboardingAdsModal from './OnboardingAdsModal';
 import OnboardingModal from './OnboardingModal';
 import OnboardingErrorModal from './OnboardingErrorModal';
-
+import { useSettingsSelect } from '../../../setup-guide/app/helpers/effects';
+import OnboardingAdsModal from './OnboardingAdsModal';
+import OnboardingModal from './OnboardingModal';
+import OnboardingErrorModal from './OnboardingErrorModal';
+import { useSettingsSelect } from '../../../setup-guide/app/helpers/effects';
+import OnboardingAdsModal from './OnboardingAdsModal';
+import OnboardingModal from './OnboardingModal';
+import OnboardingErrorModal from './OnboardingErrorModal';
+import { useSettingsSelect } from '../../../setup-guide/app/helpers/effects';
+import OnboardingAdsModal from './OnboardingAdsModal';
+import OnboardingModal from './OnboardingModal';
+import OnboardingErrorModal from './OnboardingErrorModal';
+import { useSettingsSelect } from '../../../setup-guide/app/helpers/effects';
+import OnboardingAdsModal from './OnboardingAdsModal';
+import OnboardingModal from './OnboardingModal';
+import OnboardingErrorModal from './OnboardingErrorModal';
 /**
  * Ads Onboarding Modal.
  *
