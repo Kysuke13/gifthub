@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classement des Développeurs</title>
+    <style>
+        /* Votre CSS existant ici */
+    </style>
+</head>
+<body>
+
+<?php
+// accès viia git
+session_start();
+
+// Vos variables client_id, client_secret, redirect_uri ici
+
+$client_id = '5caac847508720c17873';
+$client_secret = '6ac4cd61971e49437f225dc034aca43742736002';
+$redirect_uri = 'http://localhost/github-stats/index.php'; // L'URL de rappel configurée dans votre application OAuth GitHub
+
+if (isset($_GET['code'])) {
+    $code = $_GET['code'];
+
+    $token_request_body = [
+        'client_id' => $client_id,
+        'client_secret' => $client_secret,
+        'code' => $code,
+    ];
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-type: application/x-www-form-urlencoded\r\n" .
+                        "Accept: application/json\r\n",
+            'content' => http_build_query($token_request_body),
+        ],
+    ]);
+
+    $response = file_get_contents('https://github.com/login/oauth/access_token', false, $context);
+    $params = json_decode($response, true);
+
+    $_SESSION['access_token'] = $params['access_token'];
+
+    // Rediriger vers la page d'accueil ou une autre page après l'authentification
+    header('Location: ' . $redirect_uri);
+    exit();
+}
+
+// Vérifiez si l'utilisateur est connecté
+if (isset($_SESSION['access_token'])) {
+    $access_token = $_SESSION['access_token'];
+
+    // Récupérer les détails de l'utilisateur à l'aide de cURL
+    $ch = curl_init('https://api.github.com/user');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $access_token,
+        'User-Agent: VotreNomApp' // Remplacez par un nom significatif
+    ]);
+    curl_setopt($ch, CURLOPT_CAINFO, 'C:\wamp64\www\github-stats\cacert.pem');
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    $user_details = curl_exec($ch);
+
+    if (curl_errno($ch)) {
+        echo 'Erreur cURL : ' . curl_error($ch);
+    }
+
+    curl_close($ch);
+
+    $user = json_decode($user_details, true);
+
+    // Afficher les détails de l'utilisateur
+    //echo 'Bonjour ' . $user['login'] . ', votre ID GitHub est ' . $user['id'];
+	
+	
+} else {
+    // Redirection vers GitHub pour l'authentification
+    $authorization_endpoint = 'https://github.com/login/oauth/authorize';
+    $redirect_url = $authorization_endpoint . '?client_id=' . $client_id . '&redirect_uri=' . urlencode($redirect_uri) . '&scope=user';
+    header('Location: ' . $redirect_url);
+    exit();
+}
+
+// fin de la connexion github
+
+
+
+function get_closed_pull_requests($owner, $repo, $token, $start_date, $end_date) {
+    // Construire l'URL avec les paramètres de date
+    $closed_pull_requests_url = "https://api.github.com/repos/$owner/$repo/pulls?state=closed";
+    
+    $ch = curl_init($closed_pull_requests_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    // Ajout de l'en-tête d'autorisation
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: token ' . $token]);
+
+    // Ajout de l'en-tête User-Agent
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Nom_de_votre_application'); // Remplacez 'Nom_de_votre_application' par un nom significatif
+
+    // Désactiver la vérification du certificat SSL
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+    $closed_pull_requests_data_raw = curl_exec($ch);
+
+    // Ajout de vérifications d'erreur
+    if (curl_errno($ch)) {
+        echo 'Erreur cURL : ' . curl_error($ch);
+    }
+
+    curl_close($ch);
+
+    $closed_pull_requests_data = json_decode($closed_pull_requests_data_raw, true);
+
+    // Filtrer les résultats par date
+    $filtered_pull_requests = [];
+    foreach ($closed_pull_requests_data as $pr) {
+        $pr_created_at = $pr['created_at'];
+        if ($pr_created_at >= $start_date && $pr_created_at <= $end_date) {
+            $filtered_pull_requests[] = $pr;
+        }
+    }
+
+    return $filtered_pull_requests;
+}
+
+// Remplacez 'votre_owner', 'votre_repo', 'votre_token' par vos propres informations
+$owner = 'kysuke13';
+$repo = 'gifthub';
+$token = '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';
+
+// Récupérer les dates du formulaire s'il y a une soumission
+
+$start_date = isset($_POST['start_date']) ? $_POST['start_date'] : date('Y-m-01');
+$end_date = isset($_POST['end_date']) ? $_POST['end_date'] : date('Y-m-d');
+
+$closed_pull_requests = get_closed_pull_requests($owner, $repo, $token, $start_date, $end_date);
+
+
+// Initialisation des tableaux pour stocker les statistiques par utilisateur
+$user_stats = [];
+
+// Parcourir les Pull Requests fermées
+foreach ($closed_pull_requests as $pr) {
+    $user_login = $pr['user']['login'];
+     $avatar_url = $pr['user']['avatar_url'];  // Récupérer l'URL de l'avatar de l'utilisateur
+	 
+    // Initialiser les statistiques pour un utilisateur s'il n'a pas encore été rencontré
+    if (!isset($user_stats[$user_login])) {
+        $user_stats[$user_login] = [
+            'pull_requests' => 0,
+            'additions' => 0,
+            'deletions' => 0,
+			'avatar_url' => $avatar_url, // Ajouter l'URL de l'avatar pour cet utilisateur
+        ];
+    }
+
+    // Récupérer les détails de la Pull Request pour obtenir le nombre de lignes ajoutées et supprimées
+    $pr_details_url = $pr['url'];
+    $ch = curl_init($pr_details_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: token ' . $token]);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Nom_de_votre_application'); // Remplacez 'Nom_de_votre_application' par un nom significatif
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+    $pr_details_raw = curl_exec($ch);
+
+    if (curl_errno($ch)) {
+        echo 'Erreur cURL : ' . curl_error($ch);
+    }
+
+    curl_close($ch);
+
+    $pr_details = json_decode($pr_details_raw, true);
+
+    // Mettre à jour les statistiques avec les lignes ajoutées et supprimées
+    $user_stats[$user_login]['pull_requests']++;
+    $user_stats[$user_login]['additions'] += $pr_details['additions'];
+    $user_stats[$user_login]['deletions'] += $pr_details['deletions'];
+}
+// Tri des utilisateurs en fonction du nombre de lignes ajoutées
+arsort($user_stats);
+
+$rank = 1;
+?>
